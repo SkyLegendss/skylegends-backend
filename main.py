@@ -27,6 +27,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# jdggfgguohgowuhroghorghorhg
 # ─── Auth ─────────────────────────────────────────────────────────────────────
 
 def require_admin(x_admin_key: str = Header(default=None)):
