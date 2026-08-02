@@ -4,7 +4,8 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from pdf_generator import generate_invoice_pdf, generate_kp2_pdf, PRICE_PER_M2
+from pdf_generator import generate_invoice_pdf, generate_kp2_pdf, generate_custom_quote_pdf, PRICE_PER_M2
+from typing import Optional, List
 import os, io
 from datetime import datetime
 
@@ -52,6 +53,30 @@ class OrderRequest(BaseModel):
 
 class StatusUpdate(BaseModel):
     status: str
+
+class QuoteItem(BaseModel):
+    name: str
+    quantity: float = 1
+    unit: str = "ks"
+    show_price: bool = False
+    unit_price: Optional[float] = None
+
+class QuoteRecipient(BaseModel):
+    name: str = ""
+    company: str = ""
+    billing_address: str = ""
+    ico: str = ""
+    email: str = ""
+    phone: str = ""
+
+class CustomQuoteRequest(BaseModel):
+    recipient: Optional[QuoteRecipient] = None
+    show_items: bool = True
+    items: List[QuoteItem] = []
+    title: str = ""
+    location: str = ""
+    service_date: str = ""
+    notes: str = ""
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -206,6 +231,44 @@ async def download_pdf_kp2(
         io.BytesIO(pdf_bytes),
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=nabidka-kp2-{order_num}.pdf"},
+    )
+
+
+@app.post("/pdf/quote", dependencies=[Depends(require_admin)])
+async def generate_quote_pdf(body: CustomQuoteRequest):
+    recipient = None
+    if body.recipient:
+        recipient = {
+            "name": body.recipient.name,
+            "company": body.recipient.company,
+            "billing_address": body.recipient.billing_address,
+            "ico": body.recipient.ico,
+            "email": body.recipient.email,
+            "phone": body.recipient.phone,
+        }
+    items = [
+        {
+            "name": i.name,
+            "quantity": i.quantity,
+            "unit": i.unit,
+            "show_price": i.show_price,
+            "unit_price": i.unit_price,
+        }
+        for i in body.items
+    ]
+    pdf_bytes = generate_custom_quote_pdf(
+        recipient=recipient,
+        items=items,
+        show_items=body.show_items,
+        title=body.title,
+        location=body.location,
+        service_date=body.service_date,
+        notes=body.notes,
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=cenova-nabidka.pdf"},
     )
 
 

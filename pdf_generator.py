@@ -109,14 +109,13 @@ def _info_block(title, lines, col_w, S_note):
     ]))
 
 
-def _kp_header(story, order_num, subtitle, now, validity):
+def _kp_header(story, ref_num, subtitle, now, validity):
     S_logo  = _st("logo_h",  fontName=F_BOLD, fontSize=22, textColor=C_BLUE)
     S_tag   = _st("tag_h",   fontName=F_REG,  fontSize=8,  textColor=C_GREY, spaceAfter=0)
     S_label = _st("lbl_h",   fontName=F_BOLD, fontSize=7,  textColor=C_GREY,
                   spaceAfter=1, wordWrap="LTR", leading=10)
     S_val   = _st("val_h",   fontName=F_REG,  fontSize=9,  textColor=C_DARK, leading=13)
 
-    ref_num = order_num.replace("AW-", "NB-")
     header_data = [[
         Paragraph("SKY LEGENDS", S_logo),
         "",
@@ -148,6 +147,20 @@ def _kp_header(story, order_num, subtitle, now, validity):
 
 
 def _kp_parties(story, W, client, S_note):
+    # client=None → recipient intentionally left unspecified; show supplier only, full width.
+    if not client:
+        supplier = _info_block("DODAVATEL", [
+            ("Firma:",  COMPANY["name"]),
+            ("Adresa:", COMPANY["address"]),
+            ("IČO:",    COMPANY["ico"]),
+            ("DIČ:",    COMPANY["dic"]),
+            ("E-mail:", COMPANY["email"]),
+            ("Tel:",    COMPANY["tel"]),
+        ], W, S_note)
+        story.append(supplier)
+        story.append(Spacer(1, 7*mm))
+        return
+
     supplier = _info_block("DODAVATEL", [
         ("Firma:",  COMPANY["name"]),
         ("Adresa:", COMPANY["address"]),
@@ -249,6 +262,41 @@ def _kp_conditions(story, W, order, validity, S_note):
     story.append(cond_t)
 
 
+def _kp_conditions_generic(story, W, service_date, validity, S_note):
+    cond_data = [
+        [
+            Paragraph("PODMÍNKY NABÍDKY", _st("ph_cg", fontName=F_BOLD,
+                                               fontSize=7, textColor=C_GREY)),
+            Paragraph("TERMÍN", _st("ph2_cg", fontName=F_BOLD,
+                                     fontSize=7, textColor=C_GREY)),
+        ],
+        [
+            Paragraph(
+                f"Platnost nabídky: <b>{validity.strftime('%d.%m.%Y')}</b><br/>"
+                "Ceny jsou uvedeny bez DPH.<br/>"
+                "DPH bude účtováno dle platných předpisů.",
+                S_note
+            ),
+            Paragraph(
+                f"Požadovaný termín: <b>{service_date}</b>" if service_date else "Termín: <b>Dle dohody</b>",
+                S_note
+            ),
+        ],
+    ]
+    cond_t = Table(cond_data, colWidths=[(W/2)-3*mm, (W/2)-3*mm],
+                   style=TableStyle([
+        ("BACKGROUND",   (0,0), (-1,0),  C_LGREY),
+        ("LEFTPADDING",  (0,0), (-1,-1), 8),
+        ("RIGHTPADDING", (0,0), (-1,-1), 8),
+        ("TOPPADDING",   (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 5),
+        ("BOX",          (0,0), (-1,-1), 0.5, colors.HexColor("#e0e0e0")),
+        ("LINEBETWEEN",  (0,0), (1,-1),  0.5, colors.HexColor("#e0e0e0")),
+        ("VALIGN",       (0,0), (-1,-1), "TOP"),
+    ]))
+    story.append(cond_t)
+
+
 def _kp_footer(story, now):
     story.append(Spacer(1, 10*mm))
     story.append(HRFlowable(width="100%", thickness=0.5,
@@ -279,7 +327,7 @@ def generate_invoice_pdf(order: dict, client: dict) -> bytes:
     validity = now + timedelta(days=30)
     order_num = order.get("order_num", "AW-000001")
 
-    _kp_header(story, order_num, "Profesionální mytí fasád a oken drony", now, validity)
+    _kp_header(story, order_num.replace("AW-", "NB-"), "Profesionální mytí fasád a oken drony", now, validity)
     _kp_parties(story, W, client, S_note)
     _kp_location(story, W, order.get("location", ""), S_val)
 
@@ -372,7 +420,7 @@ def generate_kp2_pdf(order: dict, client: dict,
     validity = now + timedelta(days=30)
     order_num = order.get("order_num", "AW-000001")
 
-    _kp_header(story, order_num, "Výškové práce a výměna mřížek", now, validity)
+    _kp_header(story, order_num.replace("AW-", "NB-"), "Výškové práce a výměna mřížek", now, validity)
     _kp_parties(story, W, client, S_note)
     _kp_location(story, W, order.get("location", ""), S_val)
 
@@ -456,6 +504,109 @@ def generate_kp2_pdf(order: dict, client: dict,
     if order.get("notes"):
         story.append(Spacer(1, 5*mm))
         story.append(Paragraph(f"<b>Poznámky:</b> {order['notes']}", S_note))
+
+    _kp_footer(story, now)
+
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                             leftMargin=22*mm, rightMargin=22*mm,
+                             topMargin=18*mm, bottomMargin=18*mm)
+    doc.build(story)
+    return buf.getvalue()
+
+
+# ─── Konstruktor: volná cenová nabídka ────────────────────────────────────────
+
+def generate_custom_quote_pdf(
+    recipient: dict | None,
+    items: list,
+    show_items: bool = True,
+    title: str = "",
+    location: str = "",
+    service_date: str = "",
+    notes: str = "",
+) -> bytes:
+    buf = io.BytesIO()
+    W = A4[0] - 44*mm
+
+    S_val  = _st("val4",  fontName=F_REG, fontSize=9, textColor=C_DARK, leading=13)
+    S_note = _st("note4", fontName=F_REG, fontSize=8, textColor=C_GREY, leading=12)
+
+    story = []
+    now = datetime.now()
+    validity = now + timedelta(days=30)
+    ref_num = f"NB-{now.strftime('%y%m%d%H%M%S')}"
+
+    _kp_header(story, ref_num, title or "Cenová nabídka", now, validity)
+    _kp_parties(story, W, recipient, S_note)
+    _kp_location(story, W, location, S_val)
+
+    priced_items = [
+        it for it in items
+        if it.get("show_price") and it.get("unit_price") is not None
+    ] if show_items else []
+    total = sum(float(it["quantity"]) * float(it["unit_price"]) for it in priced_items)
+
+    if show_items and items:
+        col_w = [W - 85*mm, 28*mm, 25*mm, 30*mm]
+        rows = [["Popis", "Množství", "Cena / j. (bez DPH)", "Celkem"]]
+        for it in items:
+            qty = float(it.get("quantity") or 0)
+            unit = it.get("unit") or "ks"
+            qty_str = f"{qty:g} {unit}"
+            if it.get("show_price") and it.get("unit_price") is not None:
+                price = float(it["unit_price"])
+                rows.append([it.get("name", ""), qty_str, f"{price:,.0f} Kč", f"{price*qty:,.0f} Kč"])
+            else:
+                rows.append([it.get("name", ""), qty_str, "—", "—"])
+        if total > 0:
+            rows.append(["", "", "", f"{total:,.0f} Kč"])
+
+        body_end = -2 if total > 0 else -1
+        items_t = Table(rows, colWidths=col_w, repeatRows=1)
+        items_t.setStyle(TableStyle([
+            ("BACKGROUND",     (0,0), (-1,0),   C_DARK),
+            ("TEXTCOLOR",      (0,0), (-1,0),   C_WHITE),
+            ("FONTNAME",       (0,0), (-1,0),   F_BOLD),
+            ("FONTSIZE",       (0,0), (-1,0),   8),
+            ("TOPPADDING",     (0,0), (-1,0),   8),
+            ("BOTTOMPADDING",  (0,0), (-1,0),   8),
+            ("FONTNAME",       (0,1), (-1,body_end),  F_REG),
+            ("FONTSIZE",       (0,1), (-1,body_end),  9),
+            ("TOPPADDING",     (0,1), (-1,body_end),  7),
+            ("BOTTOMPADDING",  (0,1), (-1,body_end),  7),
+            ("ROWBACKGROUNDS", (0,1), (-1,body_end),  [C_WHITE, C_LGREY]),
+            ("ALIGN",          (1,0), (-1,-1),  "CENTER"),
+            ("ALIGN",          (3,0), (3,-1),   "RIGHT"),
+            ("VALIGN",         (0,0), (-1,-1),  "MIDDLE"),
+            ("LEFTPADDING",    (0,0), (-1,-1),  8),
+            ("RIGHTPADDING",   (0,0), (-1,-1),  8),
+            ("BOX",            (0,0), (-1,-1),  0.5, colors.HexColor("#e0e0e0")),
+        ] + ([
+            ("BACKGROUND", (0,-1), (-1,-1), C_BLUE_LT),
+            ("FONTNAME",   (0,-1), (-1,-1), F_BOLD),
+            ("FONTSIZE",   (0,-1), (-1,-1), 10),
+            ("TEXTCOLOR",  (3,-1), (3,-1),  C_BLUE),
+        ] if total > 0 else [])))
+        story.append(items_t)
+        story.append(Spacer(1, 8*mm))
+
+    if total > 0:
+        _kp_total_box(story, W, total)
+        story.append(Spacer(1, 6*mm))
+        story.append(Paragraph(
+            "Ceny jsou uvedeny bez DPH. DPH bude účtováno dle platných předpisů.", S_note
+        ))
+    else:
+        story.append(Paragraph(
+            "Cena bude stanovena individuálně po upřesnění rozsahu prací.", S_note
+        ))
+    story.append(Spacer(1, 8*mm))
+
+    _kp_conditions_generic(story, W, service_date, validity, S_note)
+
+    if notes:
+        story.append(Spacer(1, 5*mm))
+        story.append(Paragraph(f"<b>Poznámky:</b> {notes}", S_note))
 
     _kp_footer(story, now)
 
