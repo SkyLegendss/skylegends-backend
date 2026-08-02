@@ -520,6 +520,7 @@ def generate_custom_quote_pdf(
     recipient: dict | None,
     items: list,
     show_items: bool = True,
+    manual_total: float | None = None,
     title: str = "",
     location: str = "",
     service_date: str = "",
@@ -545,6 +546,10 @@ def generate_custom_quote_pdf(
         if it.get("show_price") and it.get("unit_price") is not None
     ] if show_items else []
     total = sum(float(it["quantity"]) * float(it["unit_price"]) for it in priced_items)
+
+    # Items are hidden entirely → total (if any) comes from the manually entered price instead.
+    if not show_items and manual_total:
+        total = float(manual_total)
 
     if show_items and items:
         col_w = [W - 85*mm, 28*mm, 25*mm, 30*mm]

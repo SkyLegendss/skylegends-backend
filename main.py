@@ -73,6 +73,7 @@ class CustomQuoteRequest(BaseModel):
     recipient: Optional[QuoteRecipient] = None
     show_items: bool = True
     items: List[QuoteItem] = []
+    manual_total: Optional[float] = None
     title: str = ""
     location: str = ""
     service_date: str = ""
@@ -260,6 +261,7 @@ async def generate_quote_pdf(body: CustomQuoteRequest):
         recipient=recipient,
         items=items,
         show_items=body.show_items,
+        manual_total=body.manual_total,
         title=body.title,
         location=body.location,
         service_date=body.service_date,
