@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, EmailStr
 from supabase import create_client, Client
 from dotenv import load_dotenv
-from pdf_generator import generate_invoice_pdf, PRICE_PER_M2
+from pdf_generator import generate_invoice_pdf, generate_kp2_pdf, PRICE_PER_M2
 import os, io
 from datetime import datetime
 
@@ -176,6 +176,37 @@ async def download_pdf(order_num: str):
     )
 
 
+
+
+@app.get("/orders/{order_num}/pdf/kp2", dependencies=[Depends(require_admin)])
+async def download_pdf_kp2(
+    order_num: str,
+    climber_days: int = 3,
+    climber_total: float = 48000,
+    buildings: int = 4,
+    mrizky_per_building: int = 132,
+    mrizky_price_with_vat: float = 139,
+    consumables_per_building: float = 500,
+):
+    res = supabase.table("orders").select("*, clients(*)").eq("order_num", order_num).single().execute()
+    if not res.data:
+        raise HTTPException(404, "Order not found")
+    order = res.data
+    client = order.pop("clients", {})
+    pdf_bytes = generate_kp2_pdf(
+        order, client,
+        climber_days=climber_days,
+        climber_total=climber_total,
+        buildings=buildings,
+        mrizky_per_building=mrizky_per_building,
+        mrizky_price_with_vat=mrizky_price_with_vat,
+        consumables_per_building=consumables_per_building,
+    )
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=nabidka-kp2-{order_num}.pdf"},
+    )
 
 
 @app.delete("/orders/{order_num}", dependencies=[Depends(require_admin)])
