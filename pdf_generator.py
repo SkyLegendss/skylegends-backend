@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 C_DARK    = colors.HexColor("#111111")   # near-black for table headers / text
 C_BLUE    = colors.HexColor("#000000")   # primary accent (logo, rule, total box)
 C_BLUE_LT = colors.HexColor("#efefef")   # light accent bg (total summary row)
-C_GREY    = colors.HexColor("#777777")   # secondary / label text
+C_GREY    = colors.HexColor("#777778")   # secondary / label text
 C_LGREY   = colors.HexColor("#f7f7f7")   # alternating row bg
 C_WHITE   = colors.white
 
